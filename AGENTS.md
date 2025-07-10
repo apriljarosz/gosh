@@ -29,6 +29,7 @@
 
 ## Commit Guidelines
 - **ALWAYS commit after completing a feature or making significant changes**
+- **ALWAYS write comprehensive tests for new features** - maintain high code coverage
 - Run tests before committing: `go test ./...`
 - Use descriptive commit messages that explain the "why" not just the "what"
 - Commit message format: Brief description, then details if needed

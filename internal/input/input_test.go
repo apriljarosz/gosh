@@ -363,3 +363,148 @@ func TestParseCommandEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// Tab completion tests
+func TestCompletionEngine_Complete(t *testing.T) {
+	ce := NewCompletionEngine()
+
+	tests := []struct {
+		name     string
+		line     string
+		cursor   int
+		contains []string // Commands that should be in the result
+		excludes []string // Commands that should not be in the result
+	}{
+		{
+			name:     "complete builtin command",
+			line:     "h",
+			cursor:   1,
+			contains: []string{"help", "history"},
+			excludes: []string{"cd", "exit"},
+		},
+		{
+			name:     "complete exact builtin",
+			line:     "help",
+			cursor:   4,
+			contains: []string{"help"},
+			excludes: []string{"history", "cd"},
+		},
+		{
+			name:     "complete partial command",
+			line:     "ex",
+			cursor:   2,
+			contains: []string{"exit"},
+			excludes: []string{"help", "cd"},
+		},
+		{
+			name:     "no matches for nonsense",
+			line:     "xyznonsense",
+			cursor:   11,
+			contains: []string{},
+			excludes: []string{"help", "cd", "exit"},
+		},
+		{
+			name:     "empty line includes builtins",
+			line:     "",
+			cursor:   0,
+			contains: []string{"cd", "env", "exit", "help", "history", "pwd"},
+			excludes: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ce.Complete(tt.line, tt.cursor)
+
+			// Check that all expected commands are present
+			for _, expected := range tt.contains {
+				assert.Contains(t, result, expected, "Expected %s to be in completion results", expected)
+			}
+
+			// Check that excluded commands are not present
+			for _, excluded := range tt.excludes {
+				assert.NotContains(t, result, excluded, "Expected %s to NOT be in completion results", excluded)
+			}
+		})
+	}
+}
+func TestCompletionEngine_CompleteCommand(t *testing.T) {
+	ce := NewCompletionEngine()
+
+	tests := []struct {
+		name     string
+		prefix   string
+		contains []string // Builtin commands that should be in the result
+		excludes []string // Builtin commands that should not be in the result
+	}{
+		{
+			name:     "complete h commands",
+			prefix:   "h",
+			contains: []string{"help", "history"},
+			excludes: []string{"cd", "env", "exit", "pwd"},
+		},
+		{
+			name:     "complete e commands",
+			prefix:   "e",
+			contains: []string{"env", "exit"},
+			excludes: []string{"cd", "help", "history", "pwd"},
+		},
+		{
+			name:     "complete exact match",
+			prefix:   "pwd",
+			contains: []string{"pwd"},
+			excludes: []string{"cd", "env", "exit", "help", "history"},
+		},
+		{
+			name:     "no builtin matches",
+			prefix:   "xyznonsense",
+			contains: []string{},
+			excludes: []string{"cd", "env", "exit", "help", "history", "pwd"},
+		},
+		{
+			name:     "empty prefix includes all builtins",
+			prefix:   "",
+			contains: []string{"cd", "env", "exit", "help", "history", "pwd"},
+			excludes: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ce.completeCommand(tt.prefix)
+
+			// Filter to only builtin commands for predictable testing
+			var builtinResults []string
+			for _, cmd := range result {
+				for _, builtin := range ce.builtinCommands {
+					if cmd == builtin {
+						builtinResults = append(builtinResults, cmd)
+						break
+					}
+				}
+			}
+
+			// Check that all expected builtins are present
+			for _, expected := range tt.contains {
+				assert.Contains(t, builtinResults, expected, "Expected builtin %s to be in completion results", expected)
+			}
+
+			// Check that excluded builtins are not present
+			for _, excluded := range tt.excludes {
+				assert.NotContains(t, builtinResults, excluded, "Expected builtin %s to NOT be in completion results", excluded)
+			}
+		})
+	}
+}
+func TestNewCompletionEngine(t *testing.T) {
+	ce := NewCompletionEngine()
+
+	assert.NotNil(t, ce)
+	assert.NotNil(t, ce.builtinCommands)
+	assert.Contains(t, ce.builtinCommands, "cd")
+	assert.Contains(t, ce.builtinCommands, "pwd")
+	assert.Contains(t, ce.builtinCommands, "exit")
+	assert.Contains(t, ce.builtinCommands, "help")
+	assert.Contains(t, ce.builtinCommands, "env")
+	assert.Contains(t, ce.builtinCommands, "history")
+}

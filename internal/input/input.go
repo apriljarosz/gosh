@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -40,15 +42,157 @@ type termios struct {
 
 // LineEditor handles interactive line editing with arrow key support
 type LineEditor struct {
-	history     *history.History
-	originalTty termios
-	rawMode     bool
+	history          *history.History
+	originalTty      termios
+	rawMode          bool
+	completionEngine *CompletionEngine
+}
+
+// CompletionEngine handles tab completion for commands and paths
+type CompletionEngine struct {
+	builtinCommands []string
+}
+
+// NewCompletionEngine creates a new completion engine
+func NewCompletionEngine() *CompletionEngine {
+	return &CompletionEngine{
+		builtinCommands: []string{"cd", "pwd", "exit", "help", "env", "history"},
+	}
+}
+
+// Complete returns possible completions for the given input
+func (ce *CompletionEngine) Complete(line string, cursor int) []string {
+	if cursor > len(line) {
+		cursor = len(line)
+	}
+
+	// Find the word being completed
+	wordStart := cursor
+	for wordStart > 0 && line[wordStart-1] != ' ' {
+		wordStart--
+	}
+
+	prefix := line[wordStart:cursor]
+	words := strings.Fields(line[:cursor])
+
+	// If this is the first word, complete commands
+	if len(words) <= 1 {
+		return ce.completeCommand(prefix)
+	}
+
+	// Otherwise, complete file paths
+	return ce.completePath(prefix)
+}
+
+// completeCommand completes built-in commands and executables in PATH
+func (ce *CompletionEngine) completeCommand(prefix string) []string {
+	seen := make(map[string]bool)
+	var matches []string
+
+	// Check built-in commands first (they take priority)
+	for _, cmd := range ce.builtinCommands {
+		if strings.HasPrefix(cmd, prefix) {
+			matches = append(matches, cmd)
+			seen[cmd] = true
+		}
+	}
+
+	// Check executables in PATH, avoiding duplicates
+	pathMatches := ce.completeExecutables(prefix)
+	for _, cmd := range pathMatches {
+		if !seen[cmd] {
+			matches = append(matches, cmd)
+			seen[cmd] = true
+		}
+	}
+
+	sort.Strings(matches)
+	return matches
+}
+
+// completeExecutables finds executables in PATH that match the prefix
+func (ce *CompletionEngine) completeExecutables(prefix string) []string {
+	var matches []string
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		return matches
+	}
+
+	paths := strings.Split(pathEnv, ":")
+	seen := make(map[string]bool)
+
+	for _, dir := range paths {
+		if dir == "" {
+			continue
+		}
+
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			name := entry.Name()
+			if strings.HasPrefix(name, prefix) && !seen[name] {
+				// Check if it's executable
+				if info, err := entry.Info(); err == nil && info.Mode()&0111 != 0 {
+					matches = append(matches, name)
+					seen[name] = true
+				}
+			}
+		}
+	}
+
+	return matches
+}
+
+// completePath completes file and directory paths
+func (ce *CompletionEngine) completePath(prefix string) []string {
+	var matches []string
+
+	// Handle absolute vs relative paths
+	dir := "."
+	pattern := prefix
+
+	if strings.Contains(prefix, "/") {
+		dir = filepath.Dir(prefix)
+		pattern = filepath.Base(prefix)
+		if dir == "" {
+			dir = "/"
+		}
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return matches
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, pattern) {
+			fullPath := name
+			if dir != "." {
+				fullPath = filepath.Join(dir, name)
+			}
+
+			// Add trailing slash for directories
+			if entry.IsDir() {
+				fullPath += "/"
+			}
+
+			matches = append(matches, fullPath)
+		}
+	}
+
+	sort.Strings(matches)
+	return matches
 }
 
 // NewLineEditor creates a new line editor with history support
 func NewLineEditor(hist *history.History) *LineEditor {
 	return &LineEditor{
-		history: hist,
+		history:          hist,
+		completionEngine: NewCompletionEngine(),
 	}
 }
 
@@ -147,6 +291,36 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 				le.redrawLine(line, cursor)
 			}
 
+		case 9: // Tab
+			completions := le.completionEngine.Complete(string(line), cursor)
+			if len(completions) == 1 {
+				// Single completion - insert it
+				completion := completions[0]
+				lineStr := string(line)
+
+				// Find the word being completed
+				wordStart := cursor
+				for wordStart > 0 && lineStr[wordStart-1] != ' ' {
+					wordStart--
+				}
+
+				// Replace the partial word with the completion
+				newLine := lineStr[:wordStart] + completion
+				if cursor < len(lineStr) {
+					newLine += lineStr[cursor:]
+				}
+
+				line = []rune(newLine)
+				cursor = wordStart + len(completion)
+				le.redrawLine(line, cursor)
+
+			} else if len(completions) > 1 {
+				// Multiple completions - show them
+				fmt.Print("\r\n")
+				le.showCompletions(completions)
+				le.redrawLine(line, cursor)
+			}
+
 		case 27: // Escape sequence (arrow keys)
 			seq, err := le.readEscapeSequence()
 			if err != nil {
@@ -231,6 +405,42 @@ func (le *LineEditor) redrawLine(line []rune, cursor int) {
 	// Position cursor
 	if cursor < len(line) {
 		fmt.Printf("\r\033[%dC", cursor+6) // 6 = len("gosh> ")
+	}
+}
+
+// showCompletions displays available completions in a formatted way
+func (le *LineEditor) showCompletions(completions []string) {
+	const maxCols = 80
+	const minColWidth = 12
+
+	if len(completions) == 0 {
+		return
+	}
+
+	// Find the maximum length for column width
+	maxLen := 0
+	for _, comp := range completions {
+		if len(comp) > maxLen {
+			maxLen = len(comp)
+		}
+	}
+
+	colWidth := maxLen + 2
+	if colWidth < minColWidth {
+		colWidth = minColWidth
+	}
+
+	cols := maxCols / colWidth
+	if cols < 1 {
+		cols = 1
+	}
+
+	// Print completions in columns
+	for i, comp := range completions {
+		fmt.Printf("%-*s", colWidth, comp)
+		if (i+1)%cols == 0 || i == len(completions)-1 {
+			fmt.Print("\r\n")
+		}
 	}
 }
 
