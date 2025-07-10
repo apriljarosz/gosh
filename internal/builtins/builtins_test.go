@@ -20,6 +20,7 @@ func TestIsBuiltin(t *testing.T) {
 		{"exit", true},
 		{"help", true},
 		{"env", true},
+		{"history", true},
 		{"ls", false},
 		{"echo", false},
 		{"grep", false},
@@ -325,4 +326,23 @@ func TestExitCommand(t *testing.T) {
 
 	assert.False(t, result) // Should return false to exit shell
 	assert.Equal(t, "Goodbye!", output)
+}
+
+func TestHistoryCommand(t *testing.T) {
+	// Test with no history set
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	result := historyCommand([]string{})
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	errorOutput := buf.String()
+
+	assert.True(t, result)
+	assert.Contains(t, errorOutput, "history not available")
 }

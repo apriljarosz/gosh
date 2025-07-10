@@ -4,15 +4,27 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/apriljarosz/gosh/internal/history"
 )
 
 var builtinCommands = map[string]func([]string) bool{
-	"exit": exitCommand,
-	"cd":   cdCommand,
-	"pwd":  pwdCommand,
-	"help": helpCommand,
-	"env":  envCommand,
+	"exit":    exitCommand,
+	"cd":      cdCommand,
+	"pwd":     pwdCommand,
+	"help":    helpCommand,
+	"env":     envCommand,
+	"history": historyCommand,
+}
+
+// Global history instance - will be set by main
+var globalHistory *history.History
+
+// SetHistory sets the global history instance
+func SetHistory(h *history.History) {
+	globalHistory = h
 }
 
 // IsBuiltin checks if a command is a builtin
@@ -56,6 +68,38 @@ func cdCommand(args []string) bool {
 	return true
 }
 
+func historyCommand(args []string) bool {
+	if globalHistory == nil {
+		fmt.Fprintf(os.Stderr, "history: history not available\n")
+		return true
+	}
+
+	commands := globalHistory.GetAll()
+	if len(commands) == 0 {
+		return true
+	}
+
+	// Default to showing last 20 commands
+	numToShow := 20
+	if len(args) > 0 {
+		if n, err := strconv.Atoi(args[0]); err == nil && n > 0 {
+			numToShow = n
+		}
+	}
+
+	// Show the last numToShow commands
+	start := len(commands) - numToShow
+	if start < 0 {
+		start = 0
+	}
+
+	for i := start; i < len(commands); i++ {
+		fmt.Printf("%4d  %s\n", i+1, commands[i])
+	}
+
+	return true
+}
+
 func pwdCommand(args []string) bool {
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -69,11 +113,12 @@ func pwdCommand(args []string) bool {
 func helpCommand(args []string) bool {
 	fmt.Println("gosh - Go Shell")
 	fmt.Println("Built-in commands:")
-	fmt.Println("  cd [dir]     - Change directory")
-	fmt.Println("  pwd          - Print working directory")
+	fmt.Println("  cd [dir]      - Change directory")
+	fmt.Println("  pwd           - Print working directory")
 	fmt.Println("  env [VAR=val] - Show or set environment variables")
-	fmt.Println("  help         - Show this help")
-	fmt.Println("  exit         - Exit the shell")
+	fmt.Println("  history [n]   - Show command history")
+	fmt.Println("  help          - Show this help")
+	fmt.Println("  exit          - Exit the shell")
 	return true
 }
 
