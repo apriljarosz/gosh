@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -88,6 +89,9 @@ func ParseCommand(line string) *Command {
 		}
 	}
 
+	// Expand environment variables in arguments
+	cmd.Args = expandArgsVariables(cmd.Args)
+
 	return cmd
 }
 
@@ -145,8 +149,40 @@ func ParsePipeline(line string) *Pipeline {
 			}
 		}
 
+		// Expand environment variables in arguments
+		cmd.Args = expandArgsVariables(cmd.Args)
+
 		pipeline.Commands = append(pipeline.Commands, cmd)
 	}
 
 	return pipeline
+}
+
+// ExpandVariables expands environment variables in a string
+// Supports both $VAR and ${VAR} syntax
+func ExpandVariables(s string) string {
+	// Handle ${VAR} syntax
+	re := regexp.MustCompile(`\$\{([^}]+)\}`)
+	s = re.ReplaceAllStringFunc(s, func(match string) string {
+		varName := match[2 : len(match)-1] // Remove ${ and }
+		return os.Getenv(varName)
+	})
+
+	// Handle $VAR syntax (word boundaries)
+	re = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
+	s = re.ReplaceAllStringFunc(s, func(match string) string {
+		varName := match[1:] // Remove $
+		return os.Getenv(varName)
+	})
+
+	return s
+}
+
+// expandArgsVariables expands environment variables in all arguments
+func expandArgsVariables(args []string) []string {
+	expanded := make([]string, len(args))
+	for i, arg := range args {
+		expanded[i] = ExpandVariables(arg)
+	}
+	return expanded
 }

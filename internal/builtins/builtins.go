@@ -3,6 +3,8 @@ package builtins
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 )
 
 var builtinCommands = map[string]func([]string) bool{
@@ -10,6 +12,7 @@ var builtinCommands = map[string]func([]string) bool{
 	"cd":   cdCommand,
 	"pwd":  pwdCommand,
 	"help": helpCommand,
+	"env":  envCommand,
 }
 
 // IsBuiltin checks if a command is a builtin
@@ -66,9 +69,43 @@ func pwdCommand(args []string) bool {
 func helpCommand(args []string) bool {
 	fmt.Println("gosh - Go Shell")
 	fmt.Println("Built-in commands:")
-	fmt.Println("  cd [dir]  - Change directory")
-	fmt.Println("  pwd       - Print working directory")
-	fmt.Println("  help      - Show this help")
-	fmt.Println("  exit      - Exit the shell")
+	fmt.Println("  cd [dir]     - Change directory")
+	fmt.Println("  pwd          - Print working directory")
+	fmt.Println("  env [VAR=val] - Show or set environment variables")
+	fmt.Println("  help         - Show this help")
+	fmt.Println("  exit         - Exit the shell")
+	return true
+}
+
+func envCommand(args []string) bool {
+	if len(args) == 0 {
+		// Show all environment variables
+		environ := os.Environ()
+		sort.Strings(environ)
+		for _, env := range environ {
+			fmt.Println(env)
+		}
+		return true
+	}
+
+	// Set environment variables
+	for _, arg := range args {
+		if strings.Contains(arg, "=") {
+			parts := strings.SplitN(arg, "=", 2)
+			if len(parts) == 2 {
+				err := os.Setenv(parts[0], parts[1])
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "env: %v\n", err)
+				}
+			}
+		} else {
+			// Show specific variable
+			value := os.Getenv(arg)
+			if value != "" {
+				fmt.Printf("%s=%s\n", arg, value)
+			}
+		}
+	}
+
 	return true
 }
