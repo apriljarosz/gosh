@@ -16,6 +16,7 @@ func main() {
 	// Initialize history
 	hist := history.New()
 	builtins.SetHistory(hist)
+	input.SetHistory(hist)
 
 	// Save history on exit
 	defer hist.Save()
