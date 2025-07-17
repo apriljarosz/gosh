@@ -6,8 +6,10 @@ A modern shell implementation written in Go, featuring essential shell functiona
 
 ### Core Functionality
 - **Interactive REPL** with command prompt
-- **Built-in commands**: `cd`, `pwd`, `exit`, `help`
+- **Built-in commands**: `cd`, `pwd`, `exit`, `help`, `env`, `history`, `jobs`, `fg`, `bg`
 - **External command execution** with full PATH support
+- **Command history** with persistent storage in `~/.gosh_history`
+- **Tab completion** for commands and file paths
 
 ### I/O Redirection
 - **Output redirection**: `command > file.txt`
@@ -17,7 +19,10 @@ A modern shell implementation written in Go, featuring essential shell functiona
 ### Advanced Features
 - **Pipes**: Chain commands with `|` (supports multiple pipes)
 - **Background jobs**: Run commands with `&`
+- **Job control**: Manage background jobs with `jobs`, `fg`, `bg`
+- **Environment variables**: Full support with `$VAR` and `${VAR}` expansion
 - **Command parsing** with proper tokenization
+- **Optional advanced line editing**: Arrow key navigation and history browsing
 
 ## Installation
 
@@ -95,7 +100,32 @@ gosh> sleep 10 &
 # Continue using shell while command runs
 gosh> echo "Shell is still responsive"
 Shell is still responsive
+
+# Manage jobs
+gosh> jobs
+[1]  Running    sleep 10 &
+
+# Bring job to foreground
+gosh> fg 1
 ```
+
+### Advanced Line Editing (Optional)
+By default, gosh uses simple line input for maximum compatibility. For users who want advanced features like arrow key navigation and history browsing, enable advanced mode:
+
+```bash
+# Enable advanced line editing
+export GOSH_ADVANCED_EDITING=1
+./gosh
+
+# Now you can use:
+# - Up/Down arrows: Browse command history
+# - Left/Right arrows: Move cursor within line
+# - Home/End: Jump to beginning/end of line
+# - Tab: Smart completion with common prefix
+# - Ctrl+C: Cancel current line
+```
+
+**Note**: Advanced line editing uses raw terminal mode which can sometimes cause display issues on certain terminals. The simple mode (default) is more reliable and matches the behavior of the original mkouhei/gosh implementation.
 
 ## Architecture
 
@@ -137,22 +167,30 @@ gosh> ls -la | grep "\.go$" | awk '{print $9}' | sort
 
 ## Roadmap
 
+### Completed ✅
+- [x] Environment variable expansion (`$VAR`, `${VAR}`)
+- [x] Environment variable management (`env` command)
+- [x] Command history with persistent storage
+- [x] Tab completion for files and commands
+- [x] Signal handling (Ctrl+C)
+- [x] Job control (`jobs`, `fg`, `bg` commands)
+- [x] Arrow key navigation (optional advanced mode)
+
 ### High Priority
-- [ ] Environment variable expansion (`$VAR`)
-- [ ] Environment variable management (`env` command)
+- [ ] Better command parsing (quotes, escaping)
+- [ ] Globbing support (`*.txt`, `*.go`)
+- [ ] Command substitution (`$(command)`)
 
 ### Medium Priority
-- [ ] Command history with arrow key navigation
-- [ ] Tab completion for files and commands
-- [ ] Better command parsing (quotes, escaping)
-- [ ] Signal handling (Ctrl+C, Ctrl+Z)
-- [ ] Globbing support (`*.txt`)
+- [ ] Aliases and configuration files
+- [ ] More robust signal handling (Ctrl+Z, job suspension)
+- [ ] Auto-suggestions based on history
+- [ ] Multi-line command support
 
 ### Low Priority
-- [ ] Aliases and configuration files
 - [ ] Scripting support (conditionals, loops)
 - [ ] Syntax highlighting
-- [ ] Auto-suggestions
+- [ ] Plugin system
 
 ## Contributing
 
