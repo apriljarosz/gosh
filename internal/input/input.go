@@ -227,12 +227,11 @@ func (le *LineEditor) enableRawMode() error {
 		return errno
 	}
 
-	// Create raw mode settings
+	// Create raw mode settings - more conservative approach
 	raw := le.originalTty
-	raw.Iflag &^= syscall.BRKINT | syscall.ICRNL | syscall.INPCK | syscall.ISTRIP | syscall.IXON
-	// Keep OPOST enabled for proper output processing (fixes ^M display issue)
-	raw.Cflag |= syscall.CS8
-	raw.Lflag &^= syscall.ECHO | syscall.ICANON | syscall.IEXTEN | syscall.ISIG
+	// Only disable what we absolutely need for raw input
+	raw.Lflag &^= syscall.ECHO | syscall.ICANON
+	// Keep most other processing enabled to avoid display issues
 	raw.Cc[syscall.VMIN] = 1
 	raw.Cc[syscall.VTIME] = 0
 
@@ -288,6 +287,15 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 
 		switch ch {
 		case '\r': // Enter key (in raw mode, Enter sends \r)
+			// Move to next line without carriage return
+			fmt.Print("\n")
+			result := string(line)
+			if result != "" {
+				le.history.Reset()
+			}
+			return result, nil
+
+		case '\n': // Handle \n as well just in case
 			fmt.Print("\n")
 			result := string(line)
 			if result != "" {
@@ -433,14 +441,16 @@ func (le *LineEditor) readEscapeSequence() (string, error) {
 
 // redrawLine redraws the current line and positions the cursor
 func (le *LineEditor) redrawLine(line []rune, cursor int) {
-	// Clear the line
-	fmt.Print("\r\033[K")
+	// Clear the line and move to beginning
+	os.Stdout.WriteString("\033[2K\r")
 	// Print prompt and line
-	fmt.Print("gosh> " + string(line))
+	os.Stdout.WriteString("gosh> " + string(line))
 	// Position cursor
 	if cursor < len(line) {
-		fmt.Printf("\r\033[%dC", cursor+6) // 6 = len("gosh> ")
+		os.Stdout.WriteString(fmt.Sprintf("\033[%dD", len(line)-cursor))
 	}
+	// Ensure output is flushed
+	os.Stdout.Sync()
 }
 
 // showCompletions displays available completions in a formatted way
