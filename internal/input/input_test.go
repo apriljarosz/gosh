@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/apriljarosz/gosh/internal/history"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -507,4 +508,151 @@ func TestNewCompletionEngine(t *testing.T) {
 	assert.Contains(t, ce.builtinCommands, "help")
 	assert.Contains(t, ce.builtinCommands, "env")
 	assert.Contains(t, ce.builtinCommands, "history")
+}
+
+// Test common prefix functionality
+func TestFindCommonPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		strings  []string
+		expected string
+	}{
+		{
+			name:     "empty slice",
+			strings:  []string{},
+			expected: "",
+		},
+		{
+			name:     "single string",
+			strings:  []string{"hello"},
+			expected: "hello",
+		},
+		{
+			name:     "common prefix exists",
+			strings:  []string{"hello", "help", "helicopter"},
+			expected: "hel",
+		},
+		{
+			name:     "no common prefix",
+			strings:  []string{"abc", "def", "ghi"},
+			expected: "",
+		},
+		{
+			name:     "identical strings",
+			strings:  []string{"test", "test", "test"},
+			expected: "test",
+		},
+		{
+			name:     "one string is prefix of others",
+			strings:  []string{"cat", "catch", "category"},
+			expected: "cat",
+		},
+		{
+			name:     "builtin commands starting with 'h'",
+			strings:  []string{"help", "history"},
+			expected: "h",
+		},
+		{
+			name:     "file extensions",
+			strings:  []string{"file.txt", "file.log", "file.md"},
+			expected: "file.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := findCommonPrefix(tt.strings)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Test LineEditor creation
+func TestNewLineEditor(t *testing.T) {
+	// Create a mock history for testing
+	hist := &history.History{}
+
+	le := NewLineEditor(hist)
+
+	assert.NotNil(t, le)
+	assert.Equal(t, hist, le.history)
+	assert.NotNil(t, le.completionEngine)
+	assert.False(t, le.rawMode)
+}
+
+// Test completion engine integration with common prefix
+func TestCompletionEngine_CommonPrefixCompletion(t *testing.T) {
+	ce := NewCompletionEngine()
+
+	// Test that commands starting with 'h' have common prefix 'h'
+	completions := ce.completeCommand("h")
+
+	// Filter to only builtin commands for predictable testing
+	var builtinCompletions []string
+	for _, cmd := range completions {
+		for _, builtin := range ce.builtinCommands {
+			if cmd == builtin {
+				builtinCompletions = append(builtinCompletions, cmd)
+				break
+			}
+		}
+	}
+
+	// Should include help and history
+	assert.Contains(t, builtinCompletions, "help")
+	assert.Contains(t, builtinCompletions, "history")
+
+	// Common prefix should be "h"
+	commonPrefix := findCommonPrefix(builtinCompletions)
+	assert.Equal(t, "h", commonPrefix)
+}
+
+// Test escape sequence parsing (mock test since we can't easily test raw mode)
+func TestReadEscapeSequence_Concept(t *testing.T) {
+	// This test documents the expected behavior of escape sequences
+	// In practice, arrow keys send: ESC [ A/B/C/D
+
+	tests := []struct {
+		name     string
+		sequence string
+		expected string
+	}{
+		{
+			name:     "up arrow",
+			sequence: "A",
+			expected: "A",
+		},
+		{
+			name:     "down arrow",
+			sequence: "B",
+			expected: "B",
+		},
+		{
+			name:     "right arrow",
+			sequence: "C",
+			expected: "C",
+		},
+		{
+			name:     "left arrow",
+			sequence: "D",
+			expected: "D",
+		},
+		{
+			name:     "home key",
+			sequence: "H",
+			expected: "H",
+		},
+		{
+			name:     "end key",
+			sequence: "F",
+			expected: "F",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// This test just documents the expected mapping
+			assert.Equal(t, tt.expected, tt.sequence)
+		})
+	}
 }

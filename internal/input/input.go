@@ -188,6 +188,27 @@ func (ce *CompletionEngine) completePath(prefix string) []string {
 	return matches
 }
 
+// findCommonPrefix finds the longest common prefix among a list of strings
+func findCommonPrefix(strs []string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	if len(strs) == 1 {
+		return strs[0]
+	}
+
+	prefix := strs[0]
+	for _, s := range strs[1:] {
+		for len(prefix) > 0 && !strings.HasPrefix(s, prefix) {
+			prefix = prefix[:len(prefix)-1]
+		}
+		if prefix == "" {
+			break
+		}
+	}
+	return prefix
+}
+
 // NewLineEditor creates a new line editor with history support
 func NewLineEditor(hist *history.History) *LineEditor {
 	return &LineEditor{
@@ -208,11 +229,10 @@ func (le *LineEditor) enableRawMode() error {
 
 	// Create raw mode settings
 	raw := le.originalTty
-	raw.Iflag &^= syscall.IGNBRK | syscall.BRKINT | syscall.PARMRK | syscall.ISTRIP | syscall.INLCR | syscall.IGNCR | syscall.ICRNL | syscall.IXON
+	raw.Iflag &^= syscall.BRKINT | syscall.ICRNL | syscall.INPCK | syscall.ISTRIP | syscall.IXON
 	raw.Oflag &^= syscall.OPOST
-	raw.Lflag &^= syscall.ECHO | syscall.ECHONL | syscall.ICANON | syscall.ISIG | syscall.IEXTEN
-	raw.Cflag &^= syscall.CSIZE | syscall.PARENB
 	raw.Cflag |= syscall.CS8
+	raw.Lflag &^= syscall.ECHO | syscall.ICANON | syscall.IEXTEN | syscall.ISIG
 	raw.Cc[syscall.VMIN] = 1
 	raw.Cc[syscall.VTIME] = 0
 
@@ -247,132 +267,147 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 	fmt.Print("gosh> ")
 
 	if err := le.enableRawMode(); err != nil {
-		// Fall back to simple line reading if raw mode fails
+		// Fallback to simple mode if raw mode fails
 		return le.readLineSimple()
 	}
 	defer le.disableRawMode()
 
 	var line []rune
-	var cursor int
-	historyIndex := -1
-	le.history.Reset()
+	cursor := 0
+	historyPos := le.history.Size()
+	originalLine := ""
 
 	for {
 		var buf [1]byte
 		n, err := os.Stdin.Read(buf[:])
-		if err != nil {
-			return "", err
-		}
-		if n == 0 {
+		if err != nil || n == 0 {
 			continue
 		}
 
 		ch := buf[0]
 
 		switch ch {
-		case 13: // Enter
+		case '\r', '\n': // Enter key
 			fmt.Print("\r\n")
-			return string(line), nil
+			result := string(line)
+			if result != "" {
+				le.history.Reset()
+			}
+			return result, nil
 
-		case 3: // Ctrl+C
+		case '\x03': // Ctrl+C
 			fmt.Print("^C\r\n")
+			le.history.Reset()
 			return "", fmt.Errorf("interrupted")
 
-		case 4: // Ctrl+D (EOF)
-			if len(line) == 0 {
-				fmt.Print("\r\n")
-				return "", fmt.Errorf("EOF")
-			}
-
-		case 127, 8: // Backspace
+		case '\x7f', '\b': // Backspace
 			if cursor > 0 {
 				line = append(line[:cursor-1], line[cursor:]...)
 				cursor--
 				le.redrawLine(line, cursor)
 			}
 
-		case 9: // Tab
+		case '\t': // Tab completion
 			completions := le.completionEngine.Complete(string(line), cursor)
 			if len(completions) == 1 {
 				// Single completion - insert it
 				completion := completions[0]
-				lineStr := string(line)
 
-				// Find the word being completed
+				// Replace the prefix with the completion
 				wordStart := cursor
-				for wordStart > 0 && lineStr[wordStart-1] != ' ' {
+				for wordStart > 0 && line[wordStart-1] != ' ' {
 					wordStart--
 				}
 
-				// Replace the partial word with the completion
-				newLine := lineStr[:wordStart] + completion
-				if cursor < len(lineStr) {
-					newLine += lineStr[cursor:]
-				}
-
-				line = []rune(newLine)
-				cursor = wordStart + len(completion)
+				newLine := append(line[:wordStart], []rune(completion)...)
+				newLine = append(newLine, line[cursor:]...)
+				line = newLine
+				cursor = wordStart + len([]rune(completion))
 				le.redrawLine(line, cursor)
-
 			} else if len(completions) > 1 {
-				// Multiple completions - show them
-				fmt.Print("\r\n")
-				le.showCompletions(completions)
-				le.redrawLine(line, cursor)
+				// Multiple completions - try common prefix completion first
+				commonPrefix := findCommonPrefix(completions)
+
+				// Find current word being completed
+				wordStart := cursor
+				for wordStart > 0 && line[wordStart-1] != ' ' {
+					wordStart--
+				}
+				currentWord := string(line[wordStart:cursor])
+
+				// If common prefix is longer than current word, complete to common prefix
+				if len(commonPrefix) > len(currentWord) {
+					newLine := append(line[:wordStart], []rune(commonPrefix)...)
+					newLine = append(newLine, line[cursor:]...)
+					line = newLine
+					cursor = wordStart + len([]rune(commonPrefix))
+					le.redrawLine(line, cursor)
+				} else {
+					// Show all completions
+					fmt.Print("\r\n")
+					le.showCompletions(completions)
+					le.redrawLine(line, cursor)
+				}
 			}
 
-		case 27: // Escape sequence (arrow keys)
+		case '\x1b': // Escape sequence (arrow keys)
 			seq, err := le.readEscapeSequence()
 			if err != nil {
 				continue
 			}
 
 			switch seq {
-			case "A": // Up arrow
-				if historyIndex == -1 {
-					historyIndex = le.history.Size()
-				}
-				if historyIndex > 0 {
-					historyIndex--
-					if historyIndex < le.history.Size() {
-						histCmd := le.history.GetAll()[historyIndex]
+			case "A": // Up arrow - previous history
+				if historyPos > 0 {
+					if historyPos == le.history.Size() {
+						originalLine = string(line)
+					}
+					historyPos--
+					if historyPos < le.history.Size() {
+						histCmd := le.history.GetAll()[historyPos]
 						line = []rune(histCmd)
 						cursor = len(line)
 						le.redrawLine(line, cursor)
 					}
 				}
 
-			case "B": // Down arrow
-				if historyIndex >= 0 {
-					historyIndex++
-					if historyIndex < le.history.Size() {
-						histCmd := le.history.GetAll()[historyIndex]
-						line = []rune(histCmd)
-						cursor = len(line)
-						le.redrawLine(line, cursor)
+			case "B": // Down arrow - next history
+				if historyPos < le.history.Size() {
+					historyPos++
+					if historyPos == le.history.Size() {
+						line = []rune(originalLine)
 					} else {
-						historyIndex = -1
-						line = []rune{}
-						cursor = 0
-						le.redrawLine(line, cursor)
+						histCmd := le.history.GetAll()[historyPos]
+						line = []rune(histCmd)
 					}
+					cursor = len(line)
+					le.redrawLine(line, cursor)
 				}
 
 			case "C": // Right arrow
 				if cursor < len(line) {
 					cursor++
-					fmt.Print("\033[C")
+					le.redrawLine(line, cursor)
 				}
 
 			case "D": // Left arrow
 				if cursor > 0 {
 					cursor--
-					fmt.Print("\033[D")
+					le.redrawLine(line, cursor)
 				}
+
+			case "H": // Home key
+				cursor = 0
+				le.redrawLine(line, cursor)
+
+			case "F": // End key
+				cursor = len(line)
+				le.redrawLine(line, cursor)
 			}
 
 		default:
-			if ch >= 32 && ch < 127 { // Printable characters
+			// Regular character input
+			if ch >= 32 && ch < 127 { // Printable ASCII
 				line = append(line[:cursor], append([]rune{rune(ch)}, line[cursor:]...)...)
 				cursor++
 				le.redrawLine(line, cursor)
@@ -468,14 +503,14 @@ func ReadLine() (string, error) {
 		return globalLineEditor.ReadLineWithArrows()
 	}
 
-	// Fallback to simple reading if no line editor is set up
+	// Fallback to simple mode if line editor is not available
 	fmt.Print("gosh> ")
 	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
+	line, _, err := reader.ReadLine()
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSuffix(line, "\n"), nil
+	return string(line), nil
 }
 
 // ParseLine parses a command line into arguments

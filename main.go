@@ -3,20 +3,39 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/apriljarosz/gosh/internal/builtins"
 	"github.com/apriljarosz/gosh/internal/executor"
 	"github.com/apriljarosz/gosh/internal/history"
 	"github.com/apriljarosz/gosh/internal/input"
+	"github.com/apriljarosz/gosh/internal/jobs"
 )
 
 func main() {
-	fmt.Println("Welcome to gosh - Go Shell")
+	// Set up signal handling to ensure clean exit
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		fmt.Println("\nGoodbye!")
+		os.Exit(0)
+	}()
 
+	// Set terminal to cooked mode to handle line endings properly
+	fmt.Print("\033[?1049l") // Exit alternate screen if in it
+	fmt.Print("\033[0m")     // Reset all attributes
+
+	fmt.Println("Welcome to gosh - Go Shell")
 	// Initialize history
 	hist := history.New()
 	builtins.SetHistory(hist)
 	input.SetHistory(hist)
+
+	// Initialize job manager
+	jobManager := jobs.NewJobManager()
+	builtins.SetJobManager(jobManager)
 
 	// Save history on exit
 	defer hist.Save()
