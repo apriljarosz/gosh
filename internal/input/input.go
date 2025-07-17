@@ -227,11 +227,14 @@ func (le *LineEditor) enableRawMode() error {
 		return errno
 	}
 
-	// Create raw mode settings - more conservative approach
+	// Create raw mode settings
 	raw := le.originalTty
-	// Only disable what we absolutely need for raw input
-	raw.Lflag &^= syscall.ECHO | syscall.ICANON
-	// Keep most other processing enabled to avoid display issues
+	// Disable input processing that interferes with escape sequences
+	raw.Iflag &^= syscall.BRKINT | syscall.ICRNL | syscall.INPCK | syscall.ISTRIP | syscall.IXON
+	// Disable echo and canonical mode for character-by-character input
+	raw.Lflag &^= syscall.ECHO | syscall.ICANON | syscall.IEXTEN | syscall.ISIG
+	// Set character size
+	raw.Cflag |= syscall.CS8
 	raw.Cc[syscall.VMIN] = 1
 	raw.Cc[syscall.VTIME] = 0
 
