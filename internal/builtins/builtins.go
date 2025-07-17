@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/apriljarosz/gosh/internal/history"
+	"github.com/apriljarosz/gosh/internal/jobs"
 )
 
 var builtinCommands = map[string]func([]string) bool{
@@ -17,6 +18,9 @@ var builtinCommands = map[string]func([]string) bool{
 	"help":    helpCommand,
 	"env":     envCommand,
 	"history": historyCommand,
+	"jobs":    jobsCommand,
+	"fg":      fgCommand,
+	"bg":      bgCommand,
 }
 
 // Global history instance - will be set by main

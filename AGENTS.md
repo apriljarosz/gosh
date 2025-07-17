@@ -20,6 +20,7 @@
 - Standard Go formatting with `go fmt`
 - Package names: lowercase, single word
 - Imports: standard library first, then external, then internal (as seen in main.go)
+- **Internal imports**: Use full module paths like `github.com/apriljarosz/gosh/internal/builtins` (Go requires the module name + internal path, not relative paths like `./internal/builtins`)
 - Error handling: explicit error checking, use `fmt.Fprintf(os.Stderr, ...)` for errors
 - Types: PascalCase for exported (Command, Pipeline), camelCase for unexported
 - Functions: PascalCase for exported (ReadLine, ParsePipeline), camelCase for private
