@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/apriljarosz/gosh/internal/builtins"
 	"github.com/apriljarosz/gosh/internal/executor"
@@ -14,14 +12,8 @@ import (
 )
 
 func main() {
-	// Set up signal handling to ensure clean exit
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		fmt.Println("\nGoodbye!")
-		os.Exit(0)
-	}()
+	// Note: We don't set up global Ctrl+C handling here because readline manages it
+	// This allows Ctrl+C to work properly: interrupt commands but not the shell itself
 
 	// Set terminal to cooked mode to handle line endings properly
 	fmt.Print("\033[?1049l") // Exit alternate screen if in it
