@@ -361,6 +361,8 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 		case '\x1b': // Escape sequence (arrow keys)
 			seq, err := le.readEscapeSequence()
 			if err != nil {
+				// If we can't read the escape sequence properly, ignore it
+				// This prevents malformed sequences from being added to the line
 				continue
 			}
 
@@ -426,17 +428,24 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 
 // readEscapeSequence reads an escape sequence for arrow keys
 func (le *LineEditor) readEscapeSequence() (string, error) {
-	var buf [2]byte
+	// Read the '[' character
+	var buf [1]byte
 	n, err := os.Stdin.Read(buf[:])
-	if err != nil || n < 2 {
+	if err != nil || n == 0 {
 		return "", fmt.Errorf("incomplete escape sequence")
 	}
 
-	if buf[0] == '[' {
-		return string(buf[1]), nil
+	if buf[0] != '[' {
+		return "", fmt.Errorf("unknown escape sequence")
 	}
 
-	return "", fmt.Errorf("unknown escape sequence")
+	// Read the actual key code
+	n, err = os.Stdin.Read(buf[:])
+	if err != nil || n == 0 {
+		return "", fmt.Errorf("incomplete escape sequence")
+	}
+
+	return string(buf[0]), nil
 }
 
 // redrawLine redraws the current line and positions the cursor
@@ -509,13 +518,23 @@ func SetHistory(hist *history.History) {
 
 // ReadLine reads a line of input from stdin with a prompt and arrow key support
 func ReadLine() (string, error) {
-	// Check if advanced line editing is requested via environment variable
-	if os.Getenv("GOSH_ADVANCED_EDITING") == "1" && globalLineEditor != nil {
-		return globalLineEditor.ReadLineWithArrows()
+	// Use advanced line editing by default, fallback to simple mode if it fails
+	if globalLineEditor != nil {
+		result, err := globalLineEditor.ReadLineWithArrows()
+		if err != nil && err.Error() != "interrupted" {
+			// If advanced mode fails, fall back to simple mode
+			fmt.Print("gosh> ")
+			reader := bufio.NewReader(os.Stdin)
+			line, _, err := reader.ReadLine()
+			if err != nil {
+				return "", err
+			}
+			return string(line), nil
+		}
+		return result, err
 	}
 
-	// Use simple mode by default (like mkouhei/gosh) to avoid terminal issues
-	// Raw mode can cause ^M display problems and is complex to get right
+	// Fallback to simple mode if line editor is not available
 	fmt.Print("gosh> ")
 	reader := bufio.NewReader(os.Stdin)
 	line, _, err := reader.ReadLine()
@@ -586,6 +605,12 @@ func ParseCommand(line string) *Command {
 func ParsePipeline(line string) *Pipeline {
 	line = strings.TrimSpace(line)
 	if line == "" {
+		return &Pipeline{}
+	}
+
+	// Filter out any escape sequences that might have gotten through
+	// This prevents malformed input from causing panics
+	if strings.Contains(line, "\x1b") || strings.Contains(line, "^[") {
 		return &Pipeline{}
 	}
 
