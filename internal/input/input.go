@@ -569,10 +569,9 @@ func InitReadline(hist *history.History) error {
 		Prompt:          "gosh> ",
 		HistoryFile:     hist.GetHistoryPath(),
 		AutoComplete:    completer,
-		InterruptPrompt: "^C",
+		InterruptPrompt: "", // Don't print anything on Ctrl+C
 		EOFPrompt:       "exit",
 	}
-
 	// Create readline instance
 	rl, err := readline.NewEx(config)
 	if err != nil {
@@ -596,6 +595,10 @@ func ReadLine() (string, error) {
 	if globalReadline != nil {
 		line, err := globalReadline.Readline()
 		if err != nil {
+			// Handle Ctrl+C like bash - just return empty string to continue
+			if err == readline.ErrInterrupt {
+				return "", nil
+			}
 			return "", err
 		}
 		return line, nil
