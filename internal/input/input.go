@@ -509,11 +509,13 @@ func SetHistory(hist *history.History) {
 
 // ReadLine reads a line of input from stdin with a prompt and arrow key support
 func ReadLine() (string, error) {
-	if globalLineEditor != nil {
+	// Check if advanced line editing is requested via environment variable
+	if os.Getenv("GOSH_ADVANCED_EDITING") == "1" && globalLineEditor != nil {
 		return globalLineEditor.ReadLineWithArrows()
 	}
 
-	// Fallback to simple mode if line editor is not available
+	// Use simple mode by default (like mkouhei/gosh) to avoid terminal issues
+	// Raw mode can cause ^M display problems and is complex to get right
 	fmt.Print("gosh> ")
 	reader := bufio.NewReader(os.Stdin)
 	line, _, err := reader.ReadLine()
