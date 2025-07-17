@@ -230,7 +230,7 @@ func (le *LineEditor) enableRawMode() error {
 	// Create raw mode settings
 	raw := le.originalTty
 	raw.Iflag &^= syscall.BRKINT | syscall.ICRNL | syscall.INPCK | syscall.ISTRIP | syscall.IXON
-	raw.Oflag &^= syscall.OPOST
+	// Keep OPOST enabled for proper output processing (fixes ^M display issue)
 	raw.Cflag |= syscall.CS8
 	raw.Lflag &^= syscall.ECHO | syscall.ICANON | syscall.IEXTEN | syscall.ISIG
 	raw.Cc[syscall.VMIN] = 1
