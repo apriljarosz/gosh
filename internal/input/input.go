@@ -528,12 +528,49 @@ func SetHistory(hist *history.History) {
 // Global readline instance
 var globalReadline *readline.Instance
 
+// customCompleter provides dynamic completion for commands and files
+type customCompleter struct {
+	ce *CompletionEngine
+}
+
+func (c *customCompleter) Do(line []rune, pos int) (newLine [][]rune, length int) {
+	// Convert to string for our existing completion engine
+	lineStr := string(line)
+	completions := c.ce.Complete(lineStr, pos)
+
+	if len(completions) == 0 {
+		return nil, 0
+	}
+
+	// Find the word being completed
+	wordStart := pos
+	for wordStart > 0 && lineStr[wordStart-1] != ' ' {
+		wordStart--
+	}
+
+	// Convert completions to the format readline expects
+	var suggestions [][]rune
+	for _, completion := range completions {
+		suggestions = append(suggestions, []rune(completion))
+	}
+
+	return suggestions, pos - wordStart
+}
+
 // InitReadline initializes the readline library with history
 func InitReadline(hist *history.History) error {
+	// Create our custom completer that uses the existing CompletionEngine
+	completer := &customCompleter{
+		ce: NewCompletionEngine(),
+	}
+
 	// Create readline config
 	config := &readline.Config{
-		Prompt:      "gosh> ",
-		HistoryFile: hist.GetHistoryPath(),
+		Prompt:          "gosh> ",
+		HistoryFile:     hist.GetHistoryPath(),
+		AutoComplete:    completer,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
 	}
 
 	// Create readline instance
