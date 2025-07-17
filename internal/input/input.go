@@ -231,6 +231,8 @@ func (le *LineEditor) enableRawMode() error {
 	raw := le.originalTty
 	// Disable input processing that interferes with escape sequences
 	raw.Iflag &^= syscall.BRKINT | syscall.ICRNL | syscall.INPCK | syscall.ISTRIP | syscall.IXON
+	// Disable output processing to avoid ^M issues
+	raw.Oflag &^= syscall.OPOST
 	// Disable echo and canonical mode for character-by-character input
 	raw.Lflag &^= syscall.ECHO | syscall.ICANON | syscall.IEXTEN | syscall.ISIG
 	// Set character size
@@ -290,8 +292,9 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 
 		switch ch {
 		case '\r': // Enter key (in raw mode, Enter sends \r)
-			// Move to next line without carriage return
-			fmt.Print("\n")
+			// With OPOST disabled, we need to send \r\n manually
+			os.Stdout.WriteString("\r\n")
+			os.Stdout.Sync()
 			result := string(line)
 			if result != "" {
 				le.history.Reset()
@@ -299,15 +302,16 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 			return result, nil
 
 		case '\n': // Handle \n as well just in case
-			fmt.Print("\n")
+			os.Stdout.WriteString("\r\n")
+			os.Stdout.Sync()
 			result := string(line)
 			if result != "" {
 				le.history.Reset()
 			}
 			return result, nil
-
 		case '\x03': // Ctrl+C
-			fmt.Print("^C\n")
+			os.Stdout.WriteString("^C\r\n")
+			os.Stdout.Sync()
 			le.history.Reset()
 			return "", fmt.Errorf("interrupted")
 
@@ -355,7 +359,8 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 					le.redrawLine(line, cursor)
 				} else {
 					// Show all completions
-					fmt.Print("\n")
+					os.Stdout.WriteString("\r\n")
+					os.Stdout.Sync()
 					le.showCompletions(completions)
 					le.redrawLine(line, cursor)
 				}
@@ -496,7 +501,7 @@ func (le *LineEditor) showCompletions(completions []string) {
 	for i, comp := range completions {
 		fmt.Printf("%-*s", colWidth, comp)
 		if (i+1)%cols == 0 || i == len(completions)-1 {
-			fmt.Print("\n")
+			os.Stdout.WriteString("\r\n")
 		}
 	}
 }
