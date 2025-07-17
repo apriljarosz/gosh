@@ -559,21 +559,8 @@ func (c *customCompleter) Do(line []rune, pos int) (newLine [][]rune, length int
 
 // InitReadline initializes the readline library with history
 func InitReadline(hist *history.History) error {
-	// Create our custom completer that uses the existing CompletionEngine
-	completer := &customCompleter{
-		ce: NewCompletionEngine(),
-	}
-
-	// Create readline config
-	config := &readline.Config{
-		Prompt:          "gosh> ",
-		HistoryFile:     hist.GetHistoryPath(),
-		AutoComplete:    completer,
-		InterruptPrompt: "", // Don't print anything on Ctrl+C
-		EOFPrompt:       "exit",
-	}
-	// Create readline instance
-	rl, err := readline.NewEx(config)
+	// Try a simpler approach - just use basic readline
+	rl, err := readline.New("gosh> ")
 	if err != nil {
 		return err
 	}
