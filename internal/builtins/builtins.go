@@ -26,9 +26,17 @@ var builtinCommands = map[string]func([]string) bool{
 // Global history instance - will be set by main
 var globalHistory *history.History
 
+// Global job manager instance - will be set by main
+var globalJobManager *jobs.JobManager
+
 // SetHistory sets the global history instance
 func SetHistory(h *history.History) {
 	globalHistory = h
+}
+
+// SetJobManager sets the global job manager instance
+func SetJobManager(jm *jobs.JobManager) {
+	globalJobManager = jm
 }
 
 // IsBuiltin checks if a command is a builtin
@@ -121,6 +129,9 @@ func helpCommand(args []string) bool {
 	fmt.Println("  pwd           - Print working directory")
 	fmt.Println("  env [VAR=val] - Show or set environment variables")
 	fmt.Println("  history [n]   - Show command history")
+	fmt.Println("  jobs          - Show active jobs")
+	fmt.Println("  fg <job_id>   - Bring job to foreground")
+	fmt.Println("  bg <job_id>   - Send job to background")
 	fmt.Println("  help          - Show this help")
 	fmt.Println("  exit          - Exit the shell")
 	return true
@@ -154,6 +165,66 @@ func envCommand(args []string) bool {
 				fmt.Printf("%s=%s\n", arg, value)
 			}
 		}
+	}
+
+	return true
+}
+
+func jobsCommand(args []string) bool {
+	if globalJobManager == nil {
+		fmt.Fprintf(os.Stderr, "jobs: job manager not available\n")
+		return true
+	}
+
+	globalJobManager.PrintJobs()
+	return true
+}
+
+func fgCommand(args []string) bool {
+	if globalJobManager == nil {
+		fmt.Fprintf(os.Stderr, "fg: job manager not available\n")
+		return true
+	}
+
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "fg: usage: fg <job_id>\n")
+		return true
+	}
+
+	jobID, err := strconv.Atoi(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fg: invalid job ID: %s\n", args[0])
+		return true
+	}
+
+	err = globalJobManager.BringToForeground(jobID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fg: %v\n", err)
+	}
+
+	return true
+}
+
+func bgCommand(args []string) bool {
+	if globalJobManager == nil {
+		fmt.Fprintf(os.Stderr, "bg: job manager not available\n")
+		return true
+	}
+
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "bg: usage: bg <job_id>\n")
+		return true
+	}
+
+	jobID, err := strconv.Atoi(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bg: invalid job ID: %s\n", args[0])
+		return true
+	}
+
+	err = globalJobManager.SendToBackground(jobID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bg: %v\n", err)
 	}
 
 	return true

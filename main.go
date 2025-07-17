@@ -33,6 +33,12 @@ func main() {
 	builtins.SetHistory(hist)
 	input.SetHistory(hist)
 
+	// Initialize readline with history
+	if err := input.InitReadline(hist); err != nil {
+		fmt.Printf("Warning: Could not initialize readline: %v\n", err)
+	}
+	defer input.CloseReadline()
+
 	// Initialize job manager
 	jobManager := jobs.NewJobManager()
 	builtins.SetJobManager(jobManager)

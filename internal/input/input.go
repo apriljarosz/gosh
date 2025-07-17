@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/apriljarosz/gosh/internal/history"
+	"github.com/chzyer/readline"
 )
 
 // Command represents a parsed command with potential redirection
@@ -524,9 +525,46 @@ func SetHistory(hist *history.History) {
 	globalLineEditor = NewLineEditor(hist)
 }
 
+// Global readline instance
+var globalReadline *readline.Instance
+
+// InitReadline initializes the readline library with history
+func InitReadline(hist *history.History) error {
+	// Create readline config
+	config := &readline.Config{
+		Prompt:      "gosh> ",
+		HistoryFile: hist.GetHistoryPath(),
+	}
+
+	// Create readline instance
+	rl, err := readline.NewEx(config)
+	if err != nil {
+		return err
+	}
+
+	globalReadline = rl
+	return nil
+}
+
+// CloseReadline cleans up the readline instance
+func CloseReadline() {
+	if globalReadline != nil {
+		globalReadline.Close()
+	}
+}
+
 // ReadLine reads a line of input from stdin with a prompt and arrow key support
 func ReadLine() (string, error) {
-	// Use advanced line editing by default, fallback to simple mode if it fails
+	// Try using readline library first (most reliable)
+	if globalReadline != nil {
+		line, err := globalReadline.Readline()
+		if err != nil {
+			return "", err
+		}
+		return line, nil
+	}
+
+	// Fallback to our custom implementation
 	if globalLineEditor != nil {
 		result, err := globalLineEditor.ReadLineWithArrows()
 		if err != nil && err.Error() != "interrupted" {
@@ -542,7 +580,7 @@ func ReadLine() (string, error) {
 		return result, err
 	}
 
-	// Fallback to simple mode if line editor is not available
+	// Final fallback to simple mode
 	fmt.Print("gosh> ")
 	reader := bufio.NewReader(os.Stdin)
 	line, _, err := reader.ReadLine()

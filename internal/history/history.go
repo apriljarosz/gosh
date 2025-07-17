@@ -112,6 +112,11 @@ func (h *History) Size() int {
 	return len(h.commands)
 }
 
+// GetHistoryPath returns the path to the history file
+func (h *History) GetHistoryPath() string {
+	return h.historyPath
+}
+
 // Load loads history from file
 func (h *History) Load() error {
 	file, err := os.Open(h.historyPath)
