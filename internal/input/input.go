@@ -287,8 +287,8 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 		ch := buf[0]
 
 		switch ch {
-		case '\r', '\n': // Enter key
-			fmt.Print("\r\n")
+		case '\r': // Enter key (in raw mode, Enter sends \r)
+			fmt.Print("\n")
 			result := string(line)
 			if result != "" {
 				le.history.Reset()
@@ -296,7 +296,7 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 			return result, nil
 
 		case '\x03': // Ctrl+C
-			fmt.Print("^C\r\n")
+			fmt.Print("^C\n")
 			le.history.Reset()
 			return "", fmt.Errorf("interrupted")
 
@@ -344,7 +344,7 @@ func (le *LineEditor) ReadLineWithArrows() (string, error) {
 					le.redrawLine(line, cursor)
 				} else {
 					// Show all completions
-					fmt.Print("\r\n")
+					fmt.Print("\n")
 					le.showCompletions(completions)
 					le.redrawLine(line, cursor)
 				}
@@ -474,7 +474,7 @@ func (le *LineEditor) showCompletions(completions []string) {
 	for i, comp := range completions {
 		fmt.Printf("%-*s", colWidth, comp)
 		if (i+1)%cols == 0 || i == len(completions)-1 {
-			fmt.Print("\r\n")
+			fmt.Print("\n")
 		}
 	}
 }
