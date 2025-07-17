@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 
 	"github.com/apriljarosz/gosh/internal/builtins"
 	"github.com/apriljarosz/gosh/internal/input"
@@ -29,6 +30,11 @@ func Execute(args []string) bool {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
+	// Set up process group so Ctrl+C doesn't kill the shell
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true, // Create new process group
+	}
+
 	err := cmd.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gosh: %s: %v\n", command, err)
@@ -53,6 +59,11 @@ func ExecuteCommand(cmd *input.Command) bool {
 
 	// Execute external command with redirection
 	execCmd := exec.Command(command, cmd.Args[1:]...)
+
+	// Set up process group so Ctrl+C doesn't kill the shell
+	execCmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true, // Create new process group
+	}
 
 	// Handle input redirection
 	if cmd.InputFile != "" {
@@ -139,6 +150,11 @@ func ExecutePipeline(pipeline *input.Pipeline) bool {
 		}
 
 		execCmd := exec.Command(command, cmd.Args[1:]...)
+
+		// Set up process group so Ctrl+C doesn't kill the shell
+		execCmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true, // Create new process group
+		}
 
 		// Handle input for first command
 		if i == 0 {
