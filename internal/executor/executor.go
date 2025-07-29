@@ -39,7 +39,6 @@ func Execute(args []string) bool {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gosh: %s: %v\n", command, err)
 	}
-
 	return true
 }
 
@@ -60,7 +59,7 @@ func ExecuteCommand(cmd *input.Command) bool {
 	// Execute external command with redirection
 	execCmd := exec.Command(command, cmd.Args[1:]...)
 
-	// Set up process group so Ctrl+C doesn't kill the shell
+	// Set up process group so we can control signal delivery
 	execCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true, // Create new process group
 	}
@@ -111,7 +110,6 @@ func ExecuteCommand(cmd *input.Command) bool {
 	} else {
 		err = execCmd.Run()
 	}
-
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gosh: %s: %v\n", command, err)
 	}
@@ -230,6 +228,5 @@ func ExecutePipeline(pipeline *input.Pipeline) bool {
 			fmt.Fprintf(os.Stderr, "gosh: %v\n", err)
 		}
 	}
-
 	return true
 }

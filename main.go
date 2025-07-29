@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/apriljarosz/gosh/internal/builtins"
 	"github.com/apriljarosz/gosh/internal/executor"
@@ -12,8 +14,9 @@ import (
 )
 
 func main() {
-	// Note: We don't set up global Ctrl+C handling here because readline manages it
-	// This allows Ctrl+C to work properly: interrupt commands but not the shell itself
+	// Set up signal handling - ignore SIGINT for the shell itself
+	// Child processes will handle their own signals
+	signal.Ignore(syscall.SIGINT)
 
 	// Set terminal to cooked mode to handle line endings properly
 	fmt.Print("\033[?1049l") // Exit alternate screen if in it

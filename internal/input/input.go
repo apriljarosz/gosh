@@ -517,12 +517,9 @@ func (le *LineEditor) readLineSimple() (string, error) {
 	return strings.TrimSuffix(line, "\n"), nil
 }
 
-// Global line editor instance
-var globalLineEditor *LineEditor
-
-// SetHistory sets up the line editor with history support
+// Legacy functions - kept for compatibility but not used
 func SetHistory(hist *history.History) {
-	globalLineEditor = NewLineEditor(hist)
+	// No longer needed - history is handled by readline
 }
 
 // Global readline instance
@@ -557,10 +554,29 @@ func (c *customCompleter) Do(line []rune, pos int) (newLine [][]rune, length int
 	return suggestions, pos - wordStart
 }
 
-// InitReadline initializes the readline library with history
+// InitReadline initializes the readline library with history and completion
 func InitReadline(hist *history.History) error {
-	// Try a simpler approach - just use basic readline
-	rl, err := readline.New("gosh> ")
+	// Create completion engine
+	ce := NewCompletionEngine()
+	completer := &customCompleter{ce: ce}
+
+	// Configure readline with completion and history
+	config := &readline.Config{
+		Prompt:          "gosh> ",
+		AutoComplete:    completer,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+	}
+
+	// Set up history file if available
+	if hist != nil {
+		historyPath := hist.GetHistoryPath()
+		if historyPath != "" {
+			config.HistoryFile = historyPath
+		}
+	}
+
+	rl, err := readline.NewEx(config)
 	if err != nil {
 		return err
 	}
@@ -578,7 +594,7 @@ func CloseReadline() {
 
 // ReadLine reads a line of input from stdin with a prompt and arrow key support
 func ReadLine() (string, error) {
-	// Try using readline library first (most reliable)
+	// Use readline library if available (provides arrow keys, history, tab completion)
 	if globalReadline != nil {
 		line, err := globalReadline.Readline()
 		if err != nil {
@@ -591,30 +607,14 @@ func ReadLine() (string, error) {
 		return line, nil
 	}
 
-	// Fallback to our custom implementation
-	if globalLineEditor != nil {
-		result, err := globalLineEditor.ReadLineWithArrows()
-		if err != nil && err.Error() != "interrupted" {
-			// If advanced mode fails, fall back to simple mode
-			fmt.Print("gosh> ")
-			reader := bufio.NewReader(os.Stdin)
-			line, _, err := reader.ReadLine()
-			if err != nil {
-				return "", err
-			}
-			return string(line), nil
-		}
-		return result, err
-	}
-
-	// Final fallback to simple mode
+	// Fallback to simple mode if readline not available
 	fmt.Print("gosh> ")
 	reader := bufio.NewReader(os.Stdin)
-	line, _, err := reader.ReadLine()
+	line, err := reader.ReadString('\n')
 	if err != nil {
 		return "", err
 	}
-	return string(line), nil
+	return strings.TrimSuffix(line, "\n"), nil
 }
 
 // ParseLine parses a command line into arguments
