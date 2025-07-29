@@ -170,6 +170,11 @@ func (ce *CompletionEngine) completePath(prefix string) []string {
 
 	for _, entry := range entries {
 		name := entry.Name()
+		// Skip hidden files unless the pattern starts with a dot
+		if strings.HasPrefix(name, ".") && !strings.HasPrefix(pattern, ".") {
+			continue
+		}
+
 		if strings.HasPrefix(name, pattern) {
 			fullPath := name
 			if dir != "." {
@@ -545,13 +550,55 @@ func (c *customCompleter) Do(line []rune, pos int) (newLine [][]rune, length int
 		wordStart--
 	}
 
-	// Convert completions to the format readline expects
+	// Get the current prefix being typed
+	currentPrefix := lineStr[wordStart:pos]
+
+	// Convert completions to the format readline expects (suffixes only)
 	var suggestions [][]rune
 	for _, completion := range completions {
-		suggestions = append(suggestions, []rune(completion))
+		if strings.HasPrefix(completion, currentPrefix) {
+			// Return only the suffix that needs to be added
+			suffix := completion[len(currentPrefix):]
+			suggestions = append(suggestions, []rune(suffix))
+		}
 	}
 
-	return suggestions, pos - wordStart
+	// Return the length of the shared prefix among all suggestions
+	if len(suggestions) == 0 {
+		return nil, 0
+	}
+
+	// Find the common prefix length among all suffixes
+	commonPrefixLen := 0
+	if len(suggestions) > 1 {
+		// Find how many characters all suffixes share at the beginning
+		minLen := len(suggestions[0])
+		for _, sugg := range suggestions[1:] {
+			if len(sugg) < minLen {
+				minLen = len(sugg)
+			}
+		}
+
+		for i := 0; i < minLen; i++ {
+			char := suggestions[0][i]
+			allMatch := true
+			for _, sugg := range suggestions[1:] {
+				if sugg[i] != char {
+					allMatch = false
+					break
+				}
+			}
+			if !allMatch {
+				break
+			}
+			commonPrefixLen++
+		}
+	} else {
+		// Single suggestion - return its full length
+		commonPrefixLen = len(suggestions[0])
+	}
+
+	return suggestions, commonPrefixLen
 }
 
 // InitReadline initializes the readline library with history and completion
@@ -562,10 +609,14 @@ func InitReadline(hist *history.History) error {
 
 	// Configure readline with completion and history
 	config := &readline.Config{
-		Prompt:          "gosh> ",
-		AutoComplete:    completer,
-		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
+		Prompt:                 "gosh> ",
+		AutoComplete:           completer,
+		InterruptPrompt:        "^C",
+		EOFPrompt:              "exit",
+		HistorySearchFold:      true,
+		DisableAutoSaveHistory: false,
+		// Force color support - might help with highlighting
+		FuncIsTerminal: func() bool { return true },
 	}
 
 	// Set up history file if available

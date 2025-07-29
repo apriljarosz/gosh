@@ -13,10 +13,10 @@ import (
 
 func TestShellIntegration(t *testing.T) {
 	// Build the shell first
-	buildCmd := exec.Command("go", "build", "-o", "gosh_test")
+	buildCmd := exec.Command("go", "build", "-o", "../gosh_test", "../")
 	err := buildCmd.Run()
 	assert.NoError(t, err, "Failed to build shell")
-	defer os.Remove("gosh_test") // Clean up
+	defer os.Remove("../gosh_test") // Clean up
 
 	tests := []struct {
 		name           string
@@ -64,8 +64,9 @@ func TestShellIntegration(t *testing.T) {
 			os.Chdir(tempDir)
 			defer os.Chdir(originalDir)
 
-			// Run the shell with input
-			cmd := exec.Command(originalDir + "/gosh_test")
+			// Run the shell with input (use absolute path since we're in temp dir)
+			goshPath := originalDir + "/../gosh_test"
+			cmd := exec.Command(goshPath)
 			cmd.Stdin = strings.NewReader(tt.input)
 
 			output, err := cmd.CombinedOutput()
@@ -92,13 +93,13 @@ func TestShellIntegration(t *testing.T) {
 
 func TestShellBackgroundJobs(t *testing.T) {
 	// Build the shell first
-	buildCmd := exec.Command("go", "build", "-o", "gosh_test")
+	buildCmd := exec.Command("go", "build", "-o", "../gosh_test", "../")
 	err := buildCmd.Run()
 	assert.NoError(t, err, "Failed to build shell")
-	defer os.Remove("gosh_test")
+	defer os.Remove("../gosh_test")
 
 	// Test background job
-	cmd := exec.Command("./gosh_test")
+	cmd := exec.Command("../gosh_test")
 	cmd.Stdin = strings.NewReader("sleep 1 &\nexit\n")
 
 	start := time.Now()
@@ -114,10 +115,10 @@ func TestShellBackgroundJobs(t *testing.T) {
 
 func TestShellErrorHandling(t *testing.T) {
 	// Build the shell first
-	buildCmd := exec.Command("go", "build", "-o", "gosh_test")
+	buildCmd := exec.Command("go", "build", "-o", "../gosh_test", "../")
 	err := buildCmd.Run()
 	assert.NoError(t, err, "Failed to build shell")
-	defer os.Remove("gosh_test")
+	defer os.Remove("../gosh_test")
 
 	tests := []struct {
 		name          string
@@ -141,7 +142,7 @@ func TestShellErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("./gosh_test")
+			cmd := exec.Command("../gosh_test")
 			cmd.Stdin = strings.NewReader(tt.input)
 
 			output, _ := cmd.CombinedOutput()

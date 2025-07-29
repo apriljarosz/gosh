@@ -1,10 +1,24 @@
 # Agent Guidelines for gosh
 
 ## Build/Test Commands
+**Makefile targets (preferred):**
+- Build: `make build`
+- Run: `make run`
+- Test unit: `make test`
+- Test integration: `make test-integration`
+- Test all: `make test-all`
+- Format: `make fmt`
+- Lint: `make lint`
+- Clean: `make clean`
+- Dev workflow: `make dev` (fmt + lint + test-all)
+- Help: `make help`
+
+**Direct Go commands:**
 - Build: `go build`
 - Run: `go run main.go`
 - Test all: `go test ./...`
 - Test single package: `go test ./internal/builtins`, `go test ./internal/input`, etc.
+- Test integration: `go test ./test`
 - Test with verbose: `go test -v ./...`
 - Format: `go fmt ./...`
 - Lint: `golangci-lint run` (if available)
@@ -12,6 +26,7 @@
 ## Project Structure
 - Go shell implementation with main.go entry point
 - Internal packages: `builtins` (shell commands), `executor` (command execution), `input` (parsing), `history` (command history)
+- Integration tests: `test/` directory contains end-to-end shell tests
 - Module: `github.com/apriljarosz/gosh`
 - Go version: 1.24.4
 - Uses testify for testing
